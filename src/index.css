@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Ensure edges don't block node interactions */
+.react-flow__edge {
+  pointer-events: stroke;
+}
+
+.react-flow__edge-path {
+  pointer-events: stroke;
+}
+
+/* Ensure nodes are always interactive */
+.react-flow__node {
+  pointer-events: all !important;
+  z-index: 10;
+}
+
+.react-flow__handle {
+  pointer-events: all !important;
+  z-index: 11;
+}
+
+/* Make edge selection work but don't block node clicks */
+.react-flow__edge.selected {
+  pointer-events: stroke;
+}
