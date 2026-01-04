@@ -2,7 +2,7 @@
 
 import { DraggableNode } from './draggableNode';
 
-export const PipelineToolbar = () => {
+export const PipelineToolbar = ({ onLogout }) => {
 
     const handleLogoClick = () => {
         window.open('https://vectorshift.ai/', '_blank', 'noopener,noreferrer');
@@ -25,6 +25,18 @@ export const PipelineToolbar = () => {
                         VectorShift
                     </span>
                 </div>
+
+                {/* Logout Button - Absolute Right */}
+                <button
+                    onClick={onLogout}
+                    className="absolute right-4 sm:right-6 lg:right-8 top-1/2 -translate-y-1/2 px-4 py-2 text-sm font-semibold text-white bg-red-600/80 hover:bg-red-600 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 z-10"
+                    style={{
+                        background: 'linear-gradient(135deg, rgba(220, 38, 38, 0.8) 0%, rgba(185, 28, 28, 0.8) 100%)',
+                        border: '1px solid rgba(220, 38, 38, 0.4)'
+                    }}
+                >
+                    Logout
+                </button>
                 
                 {/* Node Palette Section - Centered with left padding to avoid logo overlap */}
                 <div className="flex flex-col items-center w-full pl-20 sm:pl-32 lg:pl-40 pr-4 overflow-hidden">
@@ -33,15 +45,15 @@ export const PipelineToolbar = () => {
                             Node Palette
                         </h2>
                         <div className="flex flex-nowrap justify-center gap-2 sm:gap-2.5 w-full overflow-hidden">
-                            <DraggableNode type='customInput' label='Input' />
-                            <DraggableNode type='llm' label='LLM' />
-                            <DraggableNode type='customOutput' label='Output' />
-                            <DraggableNode type='text' label='Text' />
-                            <DraggableNode type='calculator' label='Calculator' />
-                            <DraggableNode type='condition' label='Condition' />
-                            <DraggableNode type='transform' label='Transform' />
-                            <DraggableNode type='delay' label='Delay' />
-                            <DraggableNode type='merge' label='Merge' />
+                    <DraggableNode type='customInput' label='Input' />
+                    <DraggableNode type='llm' label='LLM' />
+                    <DraggableNode type='customOutput' label='Output' />
+                    <DraggableNode type='text' label='Text' />
+                    <DraggableNode type='calculator' label='Calculator' />
+                    <DraggableNode type='condition' label='Condition' />
+                    <DraggableNode type='transform' label='Transform' />
+                    <DraggableNode type='delay' label='Delay' />
+                    <DraggableNode type='merge' label='Merge' />
                         </div>
                     </div>
                 </div>

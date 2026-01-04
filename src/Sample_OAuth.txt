@@ -1,0 +1,379 @@
+
+// OAuth Login Implementation with MongoDB
+
+
+/*
+// MongoDB Connection Configuration
+const MONGODB_URI = 'mongodb+srv://testuser:testpassword@cluster0.xxxxx.mongodb.net/vectorshift?retryWrites=true&w=majority';
+// Test Database URL - Replace with your actual MongoDB connection string
+// Format: mongodb+srv://username:password@cluster.mongodb.net/database?retryWrites=true&w=majority
+
+// Alternative local MongoDB connection for testing:
+// const MONGODB_URI = 'mongodb://localhost:27017/vectorshift';
+
+// OAuth Configuration
+const OAUTH_CONFIG = {
+  // Google OAuth
+  google: {
+    clientId: 'YOUR_GOOGLE_CLIENT_ID',
+    clientSecret: 'YOUR_GOOGLE_CLIENT_SECRET',
+    redirectUri: 'http://localhost:4003/auth/google/callback',
+    scope: 'openid email profile'
+  },
+  
+  // GitHub OAuth
+  github: {
+    clientId: 'YOUR_GITHUB_CLIENT_ID',
+    clientSecret: 'YOUR_GITHUB_CLIENT_SECRET',
+    redirectUri: 'http://localhost:4003/auth/github/callback',
+    scope: 'user:email'
+  },
+  
+  // Microsoft OAuth
+  microsoft: {
+    clientId: 'YOUR_MICROSOFT_CLIENT_ID',
+    clientSecret: 'YOUR_MICROSOFT_CLIENT_SECRET',
+    redirectUri: 'http://localhost:4003/auth/microsoft/callback',
+    scope: 'openid email profile'
+  }
+};
+
+// MongoDB User Schema (for reference)
+const userSchema = {
+  _id: 'ObjectId',
+  username: 'String',
+  email: 'String',
+  password: 'String (hashed)',
+  oauthProvider: 'String (google|github|microsoft)',
+  oauthId: 'String',
+  createdAt: 'Date',
+  lastLogin: 'Date',
+  sessionToken: 'String'
+};
+
+// Example: OAuth Login Handler
+export const handleOAuthLogin = async (provider) => {
+  try {
+    // Step 1: Redirect to OAuth provider
+    const authUrl = getOAuthUrl(provider);
+    window.location.href = authUrl;
+    
+    // Step 2: After redirect, handle callback
+    // This would be in a callback route handler
+    const handleOAuthCallback = async (code, provider) => {
+      // Exchange code for access token
+      const tokenResponse = await fetch(`/api/auth/${provider}/callback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      
+      const { accessToken, userInfo } = await tokenResponse.json();
+      
+      // Step 3: Check if user exists in MongoDB
+      const user = await findOrCreateUser(userInfo, provider);
+      
+      // Step 4: Create session
+      const sessionToken = generateSessionToken();
+      await saveSessionToMongoDB(user._id, sessionToken);
+      
+      // Step 5: Store session and redirect
+      sessionStorage.setItem('sessionToken', sessionToken);
+      sessionStorage.setItem('user', JSON.stringify(user));
+      
+      return { success: true, user };
+    };
+    
+  } catch (error) {
+    console.error('OAuth login error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Helper: Get OAuth URL
+const getOAuthUrl = (provider) => {
+  const config = OAUTH_CONFIG[provider];
+  const params = new URLSearchParams({
+    client_id: config.clientId,
+    redirect_uri: config.redirectUri,
+    response_type: 'code',
+    scope: config.scope,
+    state: generateStateToken() // CSRF protection
+  });
+  
+  const baseUrls = {
+    google: 'https://accounts.google.com/o/oauth2/v2/auth',
+    github: 'https://github.com/login/oauth/authorize',
+    microsoft: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize'
+  };
+  
+  return `${baseUrls[provider]}?${params.toString()}`;
+};
+
+// Helper: Find or Create User in MongoDB
+const findOrCreateUser = async (userInfo, provider) => {
+  // This would typically be a backend API call
+  const response = await fetch('/api/users/find-or-create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: userInfo.email,
+      name: userInfo.name,
+      oauthProvider: provider,
+      oauthId: userInfo.id,
+      picture: userInfo.picture
+    })
+  });
+  
+  return await response.json();
+  
+  // Backend MongoDB query example:
+  // const user = await db.collection('users').findOne({ 
+  //   email: userInfo.email,
+  //   oauthProvider: provider 
+  // });
+  // 
+  // if (!user) {
+  //   const newUser = {
+  //     email: userInfo.email,
+  //     username: userInfo.name,
+  //     oauthProvider: provider,
+  //     oauthId: userInfo.id,
+  //     createdAt: new Date(),
+  //     lastLogin: new Date()
+  //   };
+  //   const result = await db.collection('users').insertOne(newUser);
+  //   return { ...newUser, _id: result.insertedId };
+  // }
+  // 
+  // await db.collection('users').updateOne(
+  //   { _id: user._id },
+  //   { $set: { lastLogin: new Date() } }
+  // );
+  // return user;
+};
+
+// Helper: Save Session to MongoDB
+const saveSessionToMongoDB = async (userId, sessionToken) => {
+  // Backend API call
+  const response = await fetch('/api/sessions/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userId,
+      sessionToken,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+    })
+  });
+  
+  return await response.json();
+  
+  // Backend MongoDB query example:
+  // await db.collection('sessions').insertOne({
+  //   userId: userId,
+  //   sessionToken: sessionToken,
+  //   createdAt: new Date(),
+  //   expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+  // });
+};
+
+// Helper: Generate Session Token
+const generateSessionToken = () => {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+// Helper: Generate State Token (CSRF protection)
+const generateStateToken = () => {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+// Example: Verify Session Token
+export const verifySession = async (sessionToken) => {
+  try {
+    const response = await fetch('/api/sessions/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionToken })
+    });
+    
+    const { valid, user } = await response.json();
+    return { valid, user };
+    
+    // Backend MongoDB query example:
+    // const session = await db.collection('sessions').findOne({
+    //   sessionToken: sessionToken,
+    //   expiresAt: { $gt: new Date() }
+    // });
+    // 
+    // if (!session) {
+    //   return { valid: false };
+    // }
+    // 
+    // const user = await db.collection('users').findOne({ _id: session.userId });
+    // return { valid: true, user };
+    
+  } catch (error) {
+    console.error('Session verification error:', error);
+    return { valid: false };
+  }
+};
+
+// Example: Logout Handler
+export const handleOAuthLogout = async (sessionToken) => {
+  try {
+    // Remove session from MongoDB
+    await fetch('/api/sessions/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionToken })
+    });
+    
+    // Backend MongoDB query example:
+    // await db.collection('sessions').deleteOne({ sessionToken: sessionToken });
+    
+    // Clear local storage
+    sessionStorage.removeItem('sessionToken');
+    sessionStorage.removeItem('user');
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Logout error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Example: MongoDB Connection Setup (Backend - Node.js/Express)
+/*
+const { MongoClient } = require('mongodb');
+
+let db;
+
+const connectToMongoDB = async () => {
+  try {
+    const client = new MongoClient(MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    });
+    
+    await client.connect();
+    db = client.db('vectorshift');
+    console.log('Connected to MongoDB');
+    
+    // Create indexes
+    await db.collection('users').createIndex({ email: 1, oauthProvider: 1 }, { unique: true });
+    await db.collection('sessions').createIndex({ sessionToken: 1 }, { unique: true });
+    await db.collection('sessions').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
+    throw error;
+  }
+};
+
+module.exports = { connectToMongoDB, getDb: () => db };
+*/
+
+// Example: Express.js OAuth Routes (Backend)
+/*
+const express = require('express');
+const router = express.Router();
+
+// OAuth callback route
+router.get('/auth/:provider/callback', async (req, res) => {
+  const { provider } = req.params;
+  const { code, state } = req.query;
+  
+  // Verify state token (CSRF protection)
+  if (!verifyStateToken(state)) {
+    return res.status(400).json({ error: 'Invalid state token' });
+  }
+  
+  // Exchange code for access token
+  const tokenResponse = await fetch(`https://oauth2.googleapis.com/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: OAUTH_CONFIG[provider].clientId,
+      client_secret: OAUTH_CONFIG[provider].clientSecret,
+      code: code,
+      redirect_uri: OAUTH_CONFIG[provider].redirectUri,
+      grant_type: 'authorization_code'
+    })
+  });
+  
+  const tokens = await tokenResponse.json();
+  
+  // Get user info from OAuth provider
+  const userInfoResponse = await fetch(`https://www.googleapis.com/oauth2/v2/userinfo`, {
+    headers: { Authorization: `Bearer ${tokens.access_token}` }
+  });
+  
+  const userInfo = await userInfoResponse.json();
+  
+  // Find or create user in MongoDB
+  const user = await findOrCreateUser(userInfo, provider);
+  
+  // Create session
+  const sessionToken = generateSessionToken();
+  await saveSessionToMongoDB(user._id, sessionToken);
+  
+  // Redirect to frontend with session token
+  res.redirect(`http://localhost:4003/auth/success?token=${sessionToken}`);
+});
+
+module.exports = router;
+*/
+
+// Example: React Component Integration
+/*
+import { handleOAuthLogin, verifySession, handleOAuthLogout } from './Mongo';
+
+// In your Login component:
+const handleGoogleLogin = () => {
+  handleOAuthLogin('google');
+};
+
+// In your App component:
+useEffect(() => {
+  const checkSession = async () => {
+    const sessionToken = sessionStorage.getItem('sessionToken');
+    if (sessionToken) {
+      const { valid, user } = await verifySession(sessionToken);
+      if (valid) {
+        setIsAuthenticated(true);
+        setUser(user);
+      } else {
+        sessionStorage.removeItem('sessionToken');
+      }
+    }
+  };
+  checkSession();
+}, []);
+
+// In your logout handler:
+const handleLogout = async () => {
+  const sessionToken = sessionStorage.getItem('sessionToken');
+  if (sessionToken) {
+    await handleOAuthLogout(sessionToken);
+  }
+  setIsAuthenticated(false);
+};
+*/
+
+// Environment Variables (create .env file)
+/*
+REACT_APP_MONGODB_URI=mongodb+srv://testuser:testpassword@cluster0.xxxxx.mongodb.net/vectorshift?retryWrites=true&w=majority
+REACT_APP_GOOGLE_CLIENT_ID=your_google_client_id
+REACT_APP_GOOGLE_CLIENT_SECRET=your_google_client_secret
+REACT_APP_GITHUB_CLIENT_ID=your_github_client_id
+REACT_APP_GITHUB_CLIENT_SECRET=your_github_client_secret
+REACT_APP_MICROSOFT_CLIENT_ID=your_microsoft_client_id
+REACT_APP_MICROSOFT_CLIENT_SECRET=your_microsoft_client_secret
+*/
+
+
+
